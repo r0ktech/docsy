@@ -1,0 +1,31 @@
+SAMPLE DOCUMENT — Fictional company, for demonstration only.
+
+Harbor & Finch Studio — Remote Work Policy
+Version 2.1, effective March 1
+
+1. Purpose
+This policy explains how employees of Harbor & Finch Studio may work remotely, what equipment the studio provides, and how we stay connected as a distributed team.
+
+2. Eligibility
+All full-time employees who have completed their 90-day introductory period are eligible to work remotely up to four days per week. Employees in client-facing production roles must be on site on scheduled shoot days. Contractors follow the terms of their individual agreements.
+
+3. Core hours
+Everyone is expected to be available for collaboration between 10:00 and 15:00 in the studio's local time zone, Monday to Friday. Outside core hours, employees may arrange their schedules freely as long as deadlines are met.
+
+4. Equipment and stipend
+The studio provides a laptop, a monitor, and a headset to every remote-eligible employee. In addition, each employee receives a one-time home-office stipend of 600 USD to spend on furniture or lighting, and a monthly internet allowance of 45 USD. Receipts must be submitted through the expense system within 30 days of purchase.
+
+5. Security
+Studio laptops must use full-disk encryption and the company password manager. Client files may only be stored in the studio's approved cloud workspace, never on personal devices or personal cloud accounts. Public Wi-Fi may only be used together with the company VPN.
+
+6. Working from abroad
+Employees may work from another country for up to 20 working days per calendar year, with written approval from their manager at least two weeks in advance. Longer stays require approval from People Operations because of tax and employment law implications.
+
+7. Communication
+Teams hold a short video stand-up every Tuesday and Thursday. Messages in the team chat should be answered within four working hours during core hours. Cameras are encouraged but not required in internal meetings.
+
+8. In-person gatherings
+The whole studio meets in person for a two-day planning retreat each quarter. Travel and accommodation for retreats are paid by the studio.
+
+9. Review
+This policy is reviewed every twelve months by People Operations. Questions should be sent to the People Operations team.

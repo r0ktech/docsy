@@ -1,0 +1,23 @@
+SAMPLE DOCUMENT — Fictional product, for demonstration only.
+
+Product Launch Brief: Tidewater Notes 3.0
+
+Summary
+Tidewater Notes 3.0 introduces offline sync, shared notebooks, and a redesigned editor. The public launch is planned for the second week of May, after a four-week private beta with 400 invited users.
+
+Goals
+- Reach 25,000 weekly active users within 60 days of launch.
+- Convert 4 percent of free users to the paid plan within the first quarter.
+- Keep the crash-free session rate above 99.5 percent.
+
+Audience
+The primary audience is students and independent researchers who take long-form notes. The secondary audience is small teams of up to ten people who need shared notebooks.
+
+Pricing
+The free plan keeps unlimited personal notes. The paid plan costs 6 USD per month or 60 USD per year and adds shared notebooks, version history, and offline sync on unlimited devices.
+
+Risks
+The largest risk is sync conflicts when two people edit the same note offline. The engineering team will ship a conflict viewer that shows both versions side by side. A second risk is that the redesigned editor may confuse existing users, so the old editor will remain available for 90 days behind a settings toggle.
+
+Launch checklist owner
+The launch checklist is owned by the product marketing lead, who will run a go or no-go review three days before launch.
