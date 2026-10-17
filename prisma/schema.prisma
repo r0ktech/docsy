@@ -1,0 +1,372 @@
+// Docsy database schema.
+//
+// Vector columns use pgvector and are declared as `Unsupported` because Prisma
+// has no native vector type. They are written and queried with parameterised
+// raw SQL in src/server/retrieval and src/server/processing.
+//
+// The embedding dimension (1024) is fixed by the migration. Every supported
+// embedding provider is configured to emit 1024-dimensional vectors.
+
+generator client {
+  provider        = "prisma-client-js"
+  previewFeatures = ["postgresqlExtensions"]
+}
+
+datasource db {
+  provider   = "postgresql"
+  url        = env("DATABASE_URL")
+  extensions = [vector]
+}
+
+// ───────────────────────────── Identity ─────────────────────────────
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique // always stored lower-cased
+  name          String?
+  passwordHash  String?
+  emailVerified DateTime?
+  avatarUrl     String?
+  plan          String    @default("free")
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  sessions      Session[]
+  oauthAccounts OAuthAccount[]
+  resetTokens   PasswordResetToken[]
+  documents     Document[]
+  chunks        DocumentChunk[]
+  collections   Collection[]
+  conversations Conversation[]
+  usageRecords  UsageRecord[]
+}
+
+model OAuthAccount {
+  id                String   @id @default(cuid())
+  userId            String
+  provider          String
+  providerAccountId String
+  createdAt         DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+}
+
+model Session {
+  id         String   @id @default(cuid())
+  // SHA-256 of the opaque session token. The raw token only lives in the cookie.
+  tokenHash  String   @unique
+  userId     String
+  expiresAt  DateTime
+  lastUsedAt DateTime @default(now())
+  userAgent  String?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+}
+
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  tokenHash String    @unique
+  userId    String
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// ───────────────────────────── Documents ─────────────────────────────
+
+enum FileType {
+  PDF
+  DOCX
+  TXT
+}
+
+enum DocumentStatus {
+  UPLOADING // record reserved, bytes not yet confirmed in storage
+  QUEUED
+  PROCESSING
+  READY
+  FAILED
+}
+
+model Document {
+  id                 String         @id @default(cuid())
+  userId             String
+  title              String
+  filename           String
+  fileType           FileType
+  mimeType           String
+  sizeBytes          Int
+  sha256             String
+  storageKey         String         @unique
+  status             DocumentStatus @default(UPLOADING)
+  errorCode          String?
+  errorMessage       String?
+  pageCount          Int?
+  charCount          Int?
+  chunkCount         Int            @default(0)
+  embeddingModel     String?
+  suggestedQuestions Json?
+  isSample           Boolean        @default(false)
+  processingAttempts Int            @default(0)
+  processedAt        DateTime?
+  lastOpenedAt       DateTime?
+  createdAt          DateTime       @default(now())
+  updatedAt          DateTime       @updatedAt
+
+  user          User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pages         DocumentPage[]
+  chunks        DocumentChunk[]
+  collections   CollectionDocument[]
+  conversations ConversationDocument[]
+  citations     Citation[]
+  scopedChats   Conversation[]         @relation("ConversationDocumentScope")
+
+  // Duplicate detection: the same bytes cannot be uploaded twice by one user.
+  @@unique([userId, sha256])
+  @@index([userId, createdAt])
+  @@index([userId, status])
+  @@index([userId, lastOpenedAt])
+}
+
+// Extracted text, one row per physical page for PDFs. DOCX and TXT files have
+// no fixed pagination, so they are stored as a single segment (number = 1) and
+// chunks reference character offsets inside it.
+model DocumentPage {
+  id         String @id @default(cuid())
+  documentId String
+  number     Int
+  text       String
+
+  document Document @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@unique([documentId, number])
+}
+
+model DocumentChunk {
+  id             String                       @id @default(cuid())
+  documentId     String
+  // Denormalised owner so retrieval can filter by user without a join.
+  userId         String
+  chunkIndex     Int
+  content        String
+  // Physical page for PDFs; null when the format has no pages.
+  pageNumber     Int?
+  // Offsets into DocumentPage.text of the segment the chunk came from.
+  segmentNumber  Int
+  charStart      Int
+  charEnd        Int
+  tokenCount     Int
+  embeddingModel String
+  embedding      Unsupported("vector(1024)")?
+  // Generated column: to_tsvector('english', content). See migration.
+  tsv            Unsupported("tsvector")?
+  createdAt      DateTime                     @default(now())
+
+  document  Document   @relation(fields: [documentId], references: [id], onDelete: Cascade)
+  user      User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  citations Citation[]
+
+  @@unique([documentId, chunkIndex])
+  @@index([userId])
+}
+
+// ───────────────────────────── Collections ─────────────────────────────
+
+model Collection {
+  id          String   @id @default(cuid())
+  userId      String
+  name        String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user          User                 @relation(fields: [userId], references: [id], onDelete: Cascade)
+  documents     CollectionDocument[]
+  conversations Conversation[]
+
+  @@unique([userId, name])
+}
+
+model CollectionDocument {
+  collectionId String
+  documentId   String
+  addedAt      DateTime @default(now())
+
+  collection Collection @relation(fields: [collectionId], references: [id], onDelete: Cascade)
+  document   Document   @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@id([collectionId, documentId])
+  @@index([documentId])
+}
+
+// ───────────────────────────── Conversations ─────────────────────────────
+
+enum ScopeType {
+  LIBRARY
+  COLLECTION
+  DOCUMENTS
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+}
+
+enum MessageStatus {
+  PENDING
+  COMPLETE
+  FAILED
+}
+
+model Conversation {
+  id            String    @id @default(cuid())
+  userId        String
+  title         String
+  scopeType     ScopeType @default(LIBRARY)
+  collectionId  String?
+  // Convenience pointer when the scope is a single document.
+  documentId    String?
+  lastMessageAt DateTime  @default(now())
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  user       User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  collection Collection?            @relation(fields: [collectionId], references: [id], onDelete: SetNull)
+  document   Document?              @relation("ConversationDocumentScope", fields: [documentId], references: [id], onDelete: SetNull)
+  documents  ConversationDocument[]
+  messages   Message[]
+
+  @@index([userId, lastMessageAt])
+}
+
+model ConversationDocument {
+  conversationId String
+  documentId     String
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  document     Document     @relation(fields: [documentId], references: [id], onDelete: Cascade)
+
+  @@id([conversationId, documentId])
+  @@index([documentId])
+}
+
+model Message {
+  id             String        @id @default(cuid())
+  conversationId String
+  role           MessageRole
+  content        String
+  status         MessageStatus @default(COMPLETE)
+  errorCode      String?
+  // For assistant messages: the user message this answers. Unique so a
+  // question can only ever have one current answer (regenerate replaces it).
+  replyToId      String?       @unique
+  // Retrieval outcome for assistant messages: grounded | insufficient | error
+  grounding      String?
+  model          String?
+  inputTokens    Int?
+  outputTokens   Int?
+  createdAt      DateTime      @default(now())
+
+  conversation Conversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  replyTo      Message?     @relation("Reply", fields: [replyToId], references: [id], onDelete: Cascade)
+  reply        Message?     @relation("Reply")
+  citations    Citation[]
+
+  @@index([conversationId, createdAt])
+}
+
+// Citations snapshot the evidence at answer time so an answer stays readable
+// even if the source document is later deleted (documentId becomes null).
+model Citation {
+  id            String   @id @default(cuid())
+  messageId     String
+  // The [n] marker used in the answer text.
+  sourceIndex   Int
+  chunkId       String?
+  documentId    String?
+  documentName  String
+  pageNumber    Int?
+  segmentNumber Int?
+  charStart     Int?
+  charEnd       Int?
+  excerpt       String
+  score         Float?
+  createdAt     DateTime @default(now())
+
+  message  Message        @relation(fields: [messageId], references: [id], onDelete: Cascade)
+  chunk    DocumentChunk? @relation(fields: [chunkId], references: [id], onDelete: SetNull)
+  document Document?      @relation(fields: [documentId], references: [id], onDelete: SetNull)
+
+  @@unique([messageId, sourceIndex])
+  @@index([documentId])
+}
+
+// ───────────────────────────── Usage & infrastructure ─────────────────────────────
+
+enum UsageKind {
+  QUESTION
+  EMBEDDING
+  COMPLETION
+}
+
+model UsageRecord {
+  id           String    @id @default(cuid())
+  userId       String
+  kind         UsageKind
+  quantity     Int       @default(1)
+  inputTokens  Int       @default(0)
+  outputTokens Int       @default(0)
+  model        String?
+  createdAt    DateTime  @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, kind, createdAt])
+}
+
+enum JobStatus {
+  PENDING
+  RUNNING
+  SUCCEEDED
+  FAILED
+}
+
+// Durable job queue. One row per logical job (dedupeKey), so retries reuse the
+// row instead of creating duplicates. Workers claim rows with
+// SELECT … FOR UPDATE SKIP LOCKED.
+model Job {
+  id          String    @id @default(cuid())
+  type        String
+  dedupeKey   String    @unique
+  payload     Json
+  status      JobStatus @default(PENDING)
+  attempts    Int       @default(0)
+  maxAttempts Int       @default(3)
+  runAt       DateTime  @default(now())
+  lockedAt    DateTime?
+  lockedBy    String?
+  lastError   String?
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([status, runAt])
+}
+
+// Fixed-window rate limiting that works across serverless instances.
+model RateLimit {
+  key         String   @id
+  count       Int
+  windowStart DateTime
+}
